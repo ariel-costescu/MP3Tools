@@ -8,6 +8,11 @@ import com.mpatric.mp3agic.Mp3File
 import java.util.Date
 import scala.collection.parallel.ForkJoinTaskSupport
 import scala.concurrent.forkjoin.ForkJoinPool
+import scala.io.Source
+import scala.xml.XML
+import scala.xml.XML
+import java.io.PrintStream
+import java.io.ByteArrayOutputStream
 
 object MP3Reader {
   
@@ -117,18 +122,25 @@ object MP3Reader {
     } else {
       try {
       val c = new ChromaPrint
-      val f = c.getFingerprint(path)(0)
+      val fp = c.getFingerprint(path)(0)
       val d = c.getFingerprint(path)(1)
-    <file processTimeNS={t._2.toString()} path={path} duration={d.toString} fingerprint={f.toString}>
+      val url = "http://api.acoustid.org/v2/lookup?format=xml&client=ULjKruIh&meta=recordings+releases&duration=" + d + "&fingerprint=" + fp;
+      val u = Source.fromURL(url).mkString
+      val xu = XML.loadString(u)
+    <file processTimeNS={t._2.toString()} path={path}>
         <artist>{new PCData(if (tags(0) != null) tags(0) else "")}</artist>
         <album>{new PCData(if (tags(1) != null) tags(1) else "")}</album>
         <title>{new PCData(if (tags(2) != null) tags(2) else "")}</title>
+				<acoustid>{xu}</acoustid>
     </file>
       }
       catch {
         case e:Exception => {
+          val baos:ByteArrayOutputStream  = new ByteArrayOutputStream()
+          val p:PrintStream = new PrintStream(baos,true,"utf-8")
+          e.printStackTrace(p)
           <file processTimeNS={t._2.toString()} path={path}>
-						<error>{new PCData(e.getStackTrace.toString)}</error>
+						<error>{new PCData(baos.toString)}</error>
 					</file>
         }
       }
@@ -138,8 +150,8 @@ object MP3Reader {
   def processMusicCollection[T](startPath:String, outPath:String, errPath:String, processFile:File=>(Any, Long), fileToXML:((Any, Long))=>Elem):Unit = {
     var lb:ListBuffer[File] = new ListBuffer
     readFilesRecursively(new File(startPath), lb)
-    val mp3sPar = lb.par
-    mp3sPar.tasksupport_=(new ForkJoinTaskSupport(new ForkJoinPool(Runtime.getRuntime.availableProcessors() * 4)))
+    val mp3sPar = lb//.par
+    //mp3sPar.tasksupport_=(new ForkJoinTaskSupport(new ForkJoinPool(Runtime.getRuntime.availableProcessors() * 4)))
     val mp3s = mp3sPar.filter { f => f.getName.endsWith(".mp3") }
     
     val out = new PrintWriter(outPath)
@@ -156,7 +168,8 @@ object MP3Reader {
     <taggedXML>
       {tagged.seq}
     </taggedXML>
-    out.print(taggedXML)
+    val printer = new scala.xml.PrettyPrinter(120, 4)
+    out.print(printer.format(taggedXML))
     out.flush
     out.close
     val error = processed.filter { x => !x._1.isInstanceOf[T] }.map{ t => {
@@ -166,7 +179,7 @@ object MP3Reader {
     }}
     if (error.length > 0) {
       val errorXML = <errorXML>{error}</errorXML>
-      err.print(errorXML)
+      err.print(printer.format(errorXML))
     }
     err.flush
     err.close
