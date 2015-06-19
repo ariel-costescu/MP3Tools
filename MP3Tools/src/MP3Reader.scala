@@ -10,11 +10,11 @@ import scala.collection.parallel.ForkJoinTaskSupport
 import scala.concurrent.forkjoin.ForkJoinPool
 import scala.io.Source
 import scala.xml.XML
-import scala.xml.XML
 import java.io.PrintStream
 import java.io.ByteArrayOutputStream
 import scala.reflect.{ClassTag, classTag}
 import scala.collection.mutable.HashSet
+import scala.collection.parallel.ParSeq
 
 
 object MP3Reader {
@@ -195,9 +195,23 @@ object MP3Reader {
     processMusicCollection[(Array[String], File)](startPath, outPath, errPath, processTagLib, tagLibTagsToXML)
   }
   
-  def tagsFromAcoustId(tagLibraryPath:String):Seq[Any] = {
+  def collate(in:NodeSeq):HashSet[String] = {
+    val m = in.map(x => {
+      val h = new HashSet[String]
+      h.add(x.text.trim.toLowerCase)
+      h
+    })
+    if (m.isEmpty) {
+      return HashSet.empty
+    }
+    else {
+      return m.reduce(_ ++ _)
+    }
+  }
+  
+  def tagsFromAcoustId(tagLibraryPath:String):ParSeq[Any] = {
     val tagLibrary = XML.loadFile(tagLibraryPath)
-    val files = (tagLibrary \ "file")//.par
+    val files = (tagLibrary \ "file").par
     val acoustids = files.map { x => (x \ "acoustid" \\ "result") }
     val maxScoreResults = acoustids.map { 
       x => {
@@ -215,25 +229,13 @@ object MP3Reader {
     val tags = maxScoreResults.map {
       x => {
         if (!x.isEmpty) {
-          val recArtist = (x \\ "artist" \ "name").map(x => {
-            val h = new HashSet[String]
-            h.add(x.text.trim.toLowerCase)
-            h
-          }).reduce(_ ++ _)
-          val recReleaseTitle = (x \\ "release" \ "title").map(x => {
-            val h = new HashSet[String]
-            h.add(x.text.trim.toLowerCase)
-            h
-          }).reduce(_ ++ _)
-          val recTitle = (x \\ "recording" \ "title").map(x => {
-            val h = new HashSet[String]
-            h.add(x.text.trim.toLowerCase)
-            h
-          }).reduce(_ ++ _)
+          val recArtist = collate(x \\ "artist" \ "name")
+          val recReleaseTitle = collate(x \\ "release" \ "title")
+          val recTitle = collate(x \\ "recording" \ "title")
           (recArtist, recReleaseTitle, recTitle)
         }
         else {
-          x
+          null
         }
       }
     }
@@ -249,7 +251,7 @@ object MP3Reader {
     val errorLogPath = args(2)
     //processMusicCollectionTagLib(collectionPath, tagLibraryPath, errorLogPath)
     val tags = tagsFromAcoustId(tagLibraryPath)
-    tags.foreach(x => println(x))
+    tags.foreach(x => if(x != null) println(x))
   }
 }
 
