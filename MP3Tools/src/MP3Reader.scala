@@ -13,6 +13,8 @@ import scala.xml.XML
 import scala.xml.XML
 import java.io.PrintStream
 import java.io.ByteArrayOutputStream
+import scala.reflect.{ClassTag, classTag}
+
 
 object MP3Reader {
   
@@ -147,7 +149,7 @@ object MP3Reader {
     }
   }
   
-  def processMusicCollection[T](startPath:String, outPath:String, errPath:String, processFile:File=>(Any, Long), fileToXML:((Any, Long))=>Elem):Unit = {
+  def processMusicCollection[T : ClassTag](startPath:String, outPath:String, errPath:String, processFile:File=>(Any, Long), fileToXML:((Any, Long))=>Elem):Unit = {
     var lb:ListBuffer[File] = new ListBuffer
     readFilesRecursively(new File(startPath), lb)
     val mp3sPar = lb//.par
@@ -163,7 +165,8 @@ object MP3Reader {
     val processResult = processed.reduce((x,y) => ("Total time ",x._2 + y._2))
     println(processResult._1.toString() + (processResult._2.doubleValue() / 1000000) )
     
-    val tagged = processed.filter( x => x._1.isInstanceOf[T] ).map(fileToXML)
+    val clazz = implicitly[ClassTag[T]].runtimeClass
+    val tagged = processed.filter( x => clazz.isInstance(x._1) ).map(fileToXML)
     val taggedXML = 
     <taggedXML>
       {tagged.seq}
@@ -172,7 +175,7 @@ object MP3Reader {
     out.print(printer.format(taggedXML))
     out.flush
     out.close
-    val error = processed.filter { x => !x._1.isInstanceOf[T] }.map{ t => {
+    val error = processed.filter { x => !clazz.isInstance(x._1) }.map{ t => {
       val x = t._1
       val e = x.asInstanceOf[Tuple2[Exception, File]]
       <exception path={e._2.getAbsolutePath} message={e._1.getMessage}/>
@@ -194,8 +197,13 @@ object MP3Reader {
   }
   
   def main(args: Array[String]): Unit = {
-    processMusicCollectionTagLib("I:\\Music\\Radiohead", "I:\\out-rh.txt", "I:\\err-rh.txt")
-    //processMusicCollectionTagLib("I:\\Music", "I:\\out-tl.txt", "I:\\err-tl.txt")
+    if (args.length < 3) {
+      return
+    }
+    val collectionPath = args(0)
+    val tagLibraryPath = args(1)
+    val errorLogPath = args(2)
+    processMusicCollectionTagLib(collectionPath, tagLibraryPath, errorLogPath)
   }
 }
 
