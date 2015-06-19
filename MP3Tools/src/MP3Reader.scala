@@ -14,6 +14,7 @@ import scala.xml.XML
 import java.io.PrintStream
 import java.io.ByteArrayOutputStream
 import scala.reflect.{ClassTag, classTag}
+import scala.collection.mutable.HashSet
 
 
 object MP3Reader {
@@ -194,6 +195,51 @@ object MP3Reader {
     processMusicCollection[(Array[String], File)](startPath, outPath, errPath, processTagLib, tagLibTagsToXML)
   }
   
+  def tagsFromAcoustId(tagLibraryPath:String):Seq[Any] = {
+    val tagLibrary = XML.loadFile(tagLibraryPath)
+    val files = (tagLibrary \ "file")//.par
+    val acoustids = files.map { x => (x \ "acoustid" \\ "result") }
+    val maxScoreResults = acoustids.map { 
+      x => {
+        if (!x.isEmpty) {
+          val mx = x.maxBy { 
+            x => (x \ "score").text.toDouble 
+          } 
+          mx
+        }
+        else {
+          x
+        }
+      }
+    }
+    val tags = maxScoreResults.map {
+      x => {
+        if (!x.isEmpty) {
+          val recArtist = (x \\ "artist" \ "name").map(x => {
+            val h = new HashSet[String]
+            h.add(x.text.trim.toLowerCase)
+            h
+          }).reduce(_ ++ _)
+          val recReleaseTitle = (x \\ "release" \ "title").map(x => {
+            val h = new HashSet[String]
+            h.add(x.text.trim.toLowerCase)
+            h
+          }).reduce(_ ++ _)
+          val recTitle = (x \\ "recording" \ "title").map(x => {
+            val h = new HashSet[String]
+            h.add(x.text.trim.toLowerCase)
+            h
+          }).reduce(_ ++ _)
+          (recArtist, recReleaseTitle, recTitle)
+        }
+        else {
+          x
+        }
+      }
+    }
+    tags
+  }
+  
   def main(args: Array[String]): Unit = {
     if (args.length < 3) {
       return
@@ -201,7 +247,9 @@ object MP3Reader {
     val collectionPath = args(0)
     val tagLibraryPath = args(1)
     val errorLogPath = args(2)
-    processMusicCollectionTagLib(collectionPath, tagLibraryPath, errorLogPath)
+    //processMusicCollectionTagLib(collectionPath, tagLibraryPath, errorLogPath)
+    val tags = tagsFromAcoustId(tagLibraryPath)
+    tags.foreach(x => println(x))
   }
 }
 
