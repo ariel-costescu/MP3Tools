@@ -123,9 +123,8 @@ object MP3Reader {
     </file>
     } else {
       try {
-      val c = new ChromaPrint
-      val fp = c.getFingerprint(path)(0)
-      val d = c.getFingerprint(path)(1)
+      val fp = ChromaPrint.getFingerprint(path)(0)
+      val d = ChromaPrint.getFingerprint(path)(1)
       val url = "http://api.acoustid.org/v2/lookup?format=xml&client=ULjKruIh&meta=recordings+releases&duration=" + d + "&fingerprint=" + fp;
       val u = Source.fromURL(url).mkString
       val xu = XML.loadString(u)
@@ -152,8 +151,7 @@ object MP3Reader {
   def processMusicCollection[T : ClassTag](startPath:String, outPath:String, errPath:String, processFile:File=>(Any, Long), fileToXML:((Any, Long))=>Elem):Unit = {
     var lb:ListBuffer[File] = new ListBuffer
     readFilesRecursively(new File(startPath), lb)
-    val mp3sPar = lb//.par
-    //mp3sPar.tasksupport_=(new ForkJoinTaskSupport(new ForkJoinPool(Runtime.getRuntime.availableProcessors() * 4)))
+    val mp3sPar = lb.par
     val mp3s = mp3sPar.filter { f => f.getName.endsWith(".mp3") }
     
     val out = new PrintWriter(outPath)
