@@ -170,7 +170,7 @@ object MP3Reader {
     <taggedXML>
       {tagged.seq}
     </taggedXML>
-    val printer = new scala.xml.PrettyPrinter(120, 4)
+    val printer = new scala.xml.PrettyPrinter(280, 4)
     out.print(printer.format(taggedXML))
     out.flush
     out.close
